@@ -8,28 +8,30 @@ use std::{
     path::PathBuf,
 };
 
+use self::args::{Command, Args};
+
 mod args;
 
 const SEPERATOR_CHARS: &str = "*.,{}()[]:;?'\"<>\\/=+-@!|#&%$";
 
 fn main() -> Result<()> {
-    let args = args::Args::parse();
+    let args = Args::parse();
 
-    let ignored_words = match args.ignored_words_files {
-        Some(ignored_words_files) => read_ignored_words(&ignored_words_files)?,
+    let words_to_ignore = match args.ignored_words_files {
+        Some(ignored_words_files) => read_words_to_ignore(&ignored_words_files)?,
         None => HashSet::default(),
     };
-    let word_counts = get_word_counts(args.files, args.minimum_word_length, ignored_words)?;
+    let word_counts = count_words(args.files, args.minimum_word_length, words_to_ignore)?;
     let (sum, statistics) = calculate_statistics(word_counts, args.top);
 
     match args.command {
-        args::Command::Stats => {
+        Command::Stats => {
             println!("Total words: {sum}");
             for (word, count, frequency) in statistics {
                 println!("{word}\t{count}\t{frequency:.2}");
             }
         }
-        args::Command::Words => {
+        Command::Words => {
             for (word, count, _) in statistics {
                 print!("{}", format!("{word}\n").repeat(count));
             }
@@ -55,7 +57,7 @@ fn calculate_statistics(
     (sum, statistics)
 }
 
-fn get_word_counts(
+fn count_words(
     files: Vec<PathBuf>,
     minimum_word_length: usize,
     ignored_words: HashSet<String>,
@@ -81,7 +83,7 @@ fn get_word_counts(
     Ok(word_counts)
 }
 
-fn read_ignored_words(ignored_words_files: &[PathBuf]) -> Result<HashSet<String>, std::io::Error> {
+fn read_words_to_ignore(ignored_words_files: &[PathBuf]) -> Result<HashSet<String>, std::io::Error> {
     let ignore_files: Result<Vec<_>, _> =
         ignored_words_files.iter().map(fs::read_to_string).collect();
     Ok(ignore_files?
