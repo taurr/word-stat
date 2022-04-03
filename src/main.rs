@@ -21,7 +21,7 @@ fn main() -> Result<()> {
         Some(ignored_words_files) => read_words_to_ignore(&ignored_words_files)?,
         None => HashSet::default(),
     };
-    let word_counts = count_words(args.files, args.minimum_word_length, words_to_ignore)?;
+    let word_counts = count_words(args.files, args.minimum_word_length, &words_to_ignore)?;
     let (sum, statistics) = calculate_statistics(word_counts, args.top);
 
     match args.command {
@@ -60,7 +60,7 @@ fn calculate_statistics(
 fn count_words(
     files: Vec<PathBuf>,
     minimum_word_length: usize,
-    ignored_words: HashSet<String>,
+    ignored_words: &HashSet<String>,
 ) -> Result<HashMap<String, usize>, anyhow::Error> {
     let file_contents: Result<Vec<_>, _> = files.into_iter().map(fs::read_to_string).collect();
     let word_counts = file_contents?
