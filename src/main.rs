@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
 };
 
-use self::args::{Command, Args};
+use self::args::{Args, Command};
 
 mod args;
 
@@ -17,11 +17,21 @@ const SEPERATOR_CHARS: &str = "*.,{}()[]:;?'\"<>\\/=+-@!|#&%$";
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let words_to_ignore = match args.ignored_words_files {
-        Some(ignored_words_files) => read_words_to_ignore(&ignored_words_files)?,
-        None => HashSet::default(),
-    };
-    let word_counts = count_words(args.files, args.minimum_word_length, &words_to_ignore)?;
+    let words_to_ignore = args.ignored_words_files.map_or_else(
+        || Ok(HashSet::default()),
+        |words_files| read_words_to_ignore(&words_files),
+    )?;
+    let word_counts = count_words(
+        args.files,
+        Some(|word: &str| {
+            // word must be long enough
+            word.len() >= args.minimum_word_length
+            // word cannot be a number
+            && word.parse::<u128>().is_err()
+            // word must not be ignored
+            && !words_to_ignore.contains(word)
+        }),
+    )?;
     let (sum, statistics) = calculate_statistics(word_counts, args.top);
 
     match args.command {
@@ -35,7 +45,7 @@ fn main() -> Result<()> {
             for (word, count, _) in statistics {
                 print!("{}", format!("{word}\n").repeat(count));
             }
-        },
+        }
     }
 
     Ok(())
@@ -57,10 +67,9 @@ fn calculate_statistics(
     (sum, statistics)
 }
 
-fn count_words(
+fn count_words<F: Fn(&str) -> bool>(
     files: Vec<PathBuf>,
-    minimum_word_length: usize,
-    ignored_words: &HashSet<String>,
+    filter: Option<F>,
 ) -> Result<HashMap<String, usize>, anyhow::Error> {
     let file_contents: Result<Vec<_>, _> = files.into_iter().map(fs::read_to_string).collect();
     let word_counts = file_contents?
@@ -71,11 +80,7 @@ fn count_words(
                 .map(String::from)
                 .collect::<Vec<_>>()
         })
-        .filter(|word| {
-            word.len() >= minimum_word_length
-                && word.parse::<u128>().is_err()
-                && !ignored_words.contains(word)
-        })
+        .filter(|word| filter.as_ref().map_or(true, |f| f(word)))
         .fold(HashMap::new(), |mut map, word| {
             map.entry(word).and_modify(|count| *count += 1).or_insert(1);
             map
@@ -83,7 +88,9 @@ fn count_words(
     Ok(word_counts)
 }
 
-fn read_words_to_ignore(ignored_words_files: &[PathBuf]) -> Result<HashSet<String>, std::io::Error> {
+fn read_words_to_ignore(
+    ignored_words_files: &[PathBuf],
+) -> Result<HashSet<String>, std::io::Error> {
     let ignore_files: Result<Vec<_>, _> =
         ignored_words_files.iter().map(fs::read_to_string).collect();
     Ok(ignore_files?
