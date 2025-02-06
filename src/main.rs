@@ -12,15 +12,14 @@ use self::args::{Args, Command};
 
 mod args;
 
-const SEPERATOR_CHARS: &str = "*.,{}()[]:;?'\"<>\\/=+-@!|#&%$";
+const SEPERATOR_CHARS: &str = r#"*.,{}()[]:;?'"<>\/=+-@!|#&%$"#;
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let words_to_ignore = args.ignored_words_files.map_or_else(
-        || Ok(HashSet::default()),
-        |words_files| read_words_to_ignore(&words_files),
-    )?;
+    let words_to_ignore = args
+        .ignored_words_files
+        .map_or_else(|| Ok(HashSet::default()), read_words_to_ignore)?;
     let word_counts = count_words(
         args.files,
         Some(|word: &str| {
@@ -68,7 +67,7 @@ fn calculate_statistics(
 }
 
 fn count_words<F: Fn(&str) -> bool>(
-    files: Vec<PathBuf>,
+    files: impl IntoIterator<Item = PathBuf>,
     filter: Option<F>,
 ) -> Result<HashMap<String, usize>, anyhow::Error> {
     let file_contents: Result<Vec<_>, _> = files.into_iter().map(fs::read_to_string).collect();
@@ -89,10 +88,12 @@ fn count_words<F: Fn(&str) -> bool>(
 }
 
 fn read_words_to_ignore(
-    ignored_words_files: &[PathBuf],
+    ignored_words_files: impl IntoIterator<Item = PathBuf>,
 ) -> Result<HashSet<String>, std::io::Error> {
-    let ignore_files: Result<Vec<_>, _> =
-        ignored_words_files.iter().map(fs::read_to_string).collect();
+    let ignore_files: Result<Vec<_>, _> = ignored_words_files
+        .into_iter()
+        .map(fs::read_to_string)
+        .collect();
     Ok(ignore_files?
         .iter()
         .flat_map(|content| content.lines())
